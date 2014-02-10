@@ -54,6 +54,11 @@ irb(main):008:0> test_hash
 
 And using `<<=` did assign the result to `:key_1`, but it is still mutating the default object. So now the default object has both values.
 
+```
+irb(main):008:0> test_hash[:key_2]
+=> [:value, :value_1]
+```
+
 ## The solution
 
 
