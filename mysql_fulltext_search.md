@@ -16,7 +16,9 @@ end
 
 This works, but it is slow. MySql does a table scan on the indicated column; no indexing is available to help.
 
-// EXPLAIN SELECT for LIKE query above
+```
+15746 rows in set (0.09 sec)
+```
 
 Once our property count was in the tens of thousands, this became too slow to be usable. We considered sledgehammer solutions like [thinking-sphinx](https://github.com/pat/thinking-sphinx) and [sunspot](https://github.com/sunspot/sunspot); however both of these felt like overkill. We have a lot of records but fairly simple search requirements: full text across multiple columns in a particular model, but not across models. 
 
@@ -38,8 +40,10 @@ Simple enough. Now to execute the actual query.
 To construct the query, simply insert the `MATCH AGAINST` into the usual `SELECT` as below, passing the name of the full-text index and the query. For instance, if we wanted to search for 'Hotel California':
 
 ```
-SELECT properties.*, MATCH(p.name) AGAINST('Hotel California' IN BOOLEAN MODE) AS score
-  FROM properties
+SELECT p.*, MATCH(p.name) AGAINST('Hotel California' IN BOOLEAN MODE) AS score
+  FROM p
+    WHERE MATCH(p.name)
+            AGAINST (? IN BOOLEAN MODE)
     ORDER BY score DESC;
 ```
 
@@ -47,8 +51,10 @@ Modifiers are interpolated into the search string. Requiring that 'California' b
 
 
 ```
-SELECT pproperties.*, MATCH(p.name) AGAINST('Hotel +California' IN BOOLEAN MODE) AS score
-  FROM properties
+SELECT p.*, MATCH(p.name) AGAINST('Hotel +California' IN BOOLEAN MODE) AS score
+  FROM properties AS p
+    WHERE MATCH(p.name)
+            AGAINST ('Hotel +California' IN BOOLEAN MODE)
     ORDER BY score DESC;
 ```
 
@@ -58,12 +64,16 @@ Wildcarding a word requires appending it with a `*`:
 ```
 SELECT properties.*, MATCH(p.name) AGAINST('Hotel Califor*' IN BOOLEAN MODE) AS score
   FROM properties
+    WHERE MATCH(p.name)
+            AGAINST ('Hotel Califor*' IN BOOLEAN MODE)
     ORDER BY score DESC;
 ```
 
 `MATCH AGAINST` is much faster than `LIKE`
 
-// EXPLAIN SELECT for MATCH AGAINST
+```
+15089 rows in set (0.07 sec)
+```
 
 ## ActiveRecord
 
@@ -135,8 +145,10 @@ class PropertySearch
 
   def build_sql_statement
     <<-SQL
-      SELECT properties.*, MATCH(p.name) AGAINST('Hotel California' IN BOOLEAN MODE) AS score
-        FROM properties
+      SELECT p.*, MATCH(p.name) AGAINST('Hotel California' IN BOOLEAN MODE) AS score
+        FROM properties as p
+          WHERE MATCH(p.name)
+             AGAINST (? IN BOOLEAN MODE)
           ORDER BY score DESC;
     SQL
   end
@@ -241,8 +253,10 @@ class PropertySearcher < Search
 
   def build_sql_statement
     <<-SQL
-       SELECT properties.*, MATCH(p.name) AGAINST(? IN BOOLEAN MODE) AS score
-         FROM properties
+       SELECT p.*, MATCH(p.name) AGAINST(? IN BOOLEAN MODE) AS score
+         FROM properties as p
+            WHERE MATCH(p.name)
+                  AGAINST (? IN BOOLEAN MODE)
            ORDER BY score DESC;
     SQL
   end
@@ -267,5 +281,3 @@ def results
   end
 end
 ```
-
-
